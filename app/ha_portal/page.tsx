@@ -49,7 +49,7 @@ type Subject = {
 };
 
 const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://164.100.131.75";
+    process.env.NEXT_PUBLIC_API_BASE_URL || "https://164.100.131.75";
 
 /* ---------------------------------------------------------
    API

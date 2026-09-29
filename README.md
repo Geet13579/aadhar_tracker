@@ -14,7 +14,7 @@ pnpm dev
 bun dev
 ```
 
-Open [http://164.100.131.75](http://164.100.131.75) with your browser to see the result.
+Open [https://164.100.131.75](https://164.100.131.75) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
