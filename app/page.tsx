@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import PointInfoModal from "./components/PointInfoModal";
 import formatRemarkDate from "./components/date_formate";
 
@@ -40,19 +40,6 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers || {}) } });
-  if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(message || `API request failed: ${response.status}`);
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-async function categoryCreateApi<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -61,15 +48,60 @@ async function categoryCreateApi<T>(
     },
   });
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(
-      message || `Category create API request failed: ${response.status}`
-    );
+  // Read the response only once.
+  const text = await response.text();
+
+  let parsed: unknown = null;
+
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
   }
 
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  // Handle both HTTP errors and APIs that return { status: false } with 2xx.
+  if (!response.ok || (
+    parsed &&
+    typeof parsed === "object" &&
+    "status" in parsed &&
+    (parsed as Record<string, unknown>).status === false
+  )) {
+    let message = `API request failed: ${response.status}`;
+
+    if (parsed && typeof parsed === "object") {
+      const data = parsed as Record<string, unknown>;
+
+      if (typeof data.message === "string" && data.message.trim()) {
+        message = data.message.trim();
+      } else if (typeof data.error === "string" && data.error.trim()) {
+        message = data.error.trim();
+      }
+    } else if (text.trim()) {
+      message = text.trim();
+    }
+
+    throw new Error(message);
+  }
+
+  if (response.status === 204 || !text) {
+    return undefined as T;
+  }
+
+  if (parsed !== null) {
+    return parsed as T;
+  }
+
+  return text as T;
+}
+
+async function categoryCreateApi<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  // Use the same safe response/error handling as every other API call.
+  return api<T>(path, options);
 }
 
 function asArray<T>(value: unknown): T[] {
@@ -488,14 +520,55 @@ export default function Home() {
 
   const saveEdit = async (id: number) => {
     const name = editName.trim();
+
     if (!name || saving) return;
-    setSaving(true); setError("");
+
+    setSaving(true);
+    setError("");
+
     try {
-      await api(`/subjects/${id}`, { method: "PATCH", body: JSON.stringify({ name, status: "TODO" }) });
-      setSubjects((prev) => prev.map((item) => item.id === id ? { ...item, title: name } : item));
-      setEditingId(null); setEditName("");
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to update subject"); }
-    finally { setSaving(false); }
+      await api(`/subjects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name,
+          status: "TODO",
+        }),
+      });
+
+      // Always reload from the server after a successful update.
+      // This keeps the UI in sync with the backend.
+      if (categoryId) {
+        await loadSubjects(categoryId);
+      }
+
+      setEditingId(null);
+      setEditName("");
+      setError("");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to update subject";
+
+      // Show only the clean backend message, e.g.
+      // "Subject cannot be edited after 1 hour."
+      setError(message);
+
+      // The server rejected the edit, so reload the original subject
+      // data instead of leaving the optimistic/stale value on screen.
+      if (categoryId) {
+        try {
+          await loadSubjects(categoryId);
+        } catch {
+          // Keep the original edit error visible if reload also fails.
+        }
+      }
+
+      setEditingId(null);
+      setEditName("");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openPointForm = (subjectId: number) => {
@@ -724,8 +797,23 @@ export default function Home() {
 
 
             {error && (
-              <div className="mb-3 rounded-md border border-red-300/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                {error}
+              <div
+                role="alert"
+                className="mb-3 flex items-start justify-between gap-3 rounded-md border border-red-400/40 bg-red-500/10 px-3 py-3 text-sm text-red-200"
+              >
+                <div className="flex min-w-0 items-start gap-2">
+                  <span className="mt-[1px] shrink-0">⚠️</span>
+                  <p className="break-words">{error}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setError("")}
+                  className="shrink-0 text-lg leading-none text-red-200/70 hover:text-white"
+                  aria-label="Close error"
+                >
+                  ×
+                </button>
               </div>
             )}
 
@@ -872,7 +960,7 @@ export default function Home() {
             value={subjectName}
             onChange={(e) => setSubjectName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleAddSubject();
+              if (e.key === "Enter") void handleAddSubject();
 
               if (e.key === "Escape") {
                 setShowSubjectModal(false);
@@ -891,10 +979,12 @@ export default function Home() {
             </button>
 
             <button
-              onClick={handleAddSubject}
-              className="flex-1 rounded-md bg-[#50bbaa] py-2 text-sm font-bold text-[#17242d]"
+              type="button"
+              onClick={() => void handleAddSubject()}
+              disabled={!subjectName.trim() || !categoryId || saving}
+              className="flex-1 rounded-md bg-[#50bbaa] py-2 text-sm font-bold text-[#17242d] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add
+              {saving ? "Adding..." : "Add"}
             </button>
           </div>
         </Modal>
@@ -1233,7 +1323,7 @@ function SubjectCard({
    MODAL
 ===================================================== */
 
-function Modal({ children }: { children: React.ReactNode }) {
+function Modal({ children }: { children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="w-full max-w-[380px] rounded-xl border border-white/10 bg-[#263746] p-5 shadow-2xl">
