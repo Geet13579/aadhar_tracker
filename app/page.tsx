@@ -632,6 +632,7 @@ export default function Home() {
                   >
                     <PlusIcon size={14} />
                   </button>
+
                 </div>
 
                 <div className="relative">
@@ -654,54 +655,64 @@ export default function Home() {
               </div>
 
               {/* SUB CATEGORY */}
-              {categoryId && categories.find((item) => item.id === categoryId)?.hasSubCategories && (
-                <div className="mb-4">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <label className="block text-[14px] font-bold text-[#d9e0e5] lg:text-[18px]">
-                      Select Sub Category
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { setSubCategoryName(""); setShowSubCategoryModal(true); }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf]"
-                      title="Add Sub Category"
-                    >
-                      <PlusIcon size={14} />
-                    </button>
-                  </div>
-
-                  {categories.find((item) => item.id === categoryId)?.hasSubCategories && (
-                    <div className="relative">
-                      <select
-                        value={subCategoryId ?? ""}
-                        onChange={(e) => {
-                          const nextId = Number(e.target.value);
-                          const selected = subCategories.find(
-                            (item) => item.id === nextId
-                          );
-
-                          setSubCategoryId(nextId);
-                          setSubCategory(selected?.name || "");
-                        }}
-                        disabled={subCategories.length === 0}
-                        className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60 lg:text-[16px]"
-                      >
-                        {subCategories.length === 0 ? (
-                          <option value="">No sub category available</option>
-                        ) : (
-                          subCategories.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-
-                      <SelectArrow />
-                    </div>
-                  )}
+              {/* {categoryId && categories.find((item) => item.id === categoryId)?.hasSubCategories && ( */}
+              <div className="mb-4">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[14px] font-bold text-[#d9e0e5] lg:text-[18px]">
+                    Select Sub Category
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setSubCategoryName(""); setShowSubCategoryModal(true); }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf]"
+                    title="Add Sub Category"
+                  >
+                    <PlusIcon size={14} />
+                  </button>
                 </div>
-              )}
+
+                {/* {categories.find((item) => item.id === categoryId)?.hasSubCategories && ( */}
+                <div className="relative">
+                  <select
+                    value={subCategoryId ?? ""}
+                    onChange={(e) => {
+                      const nextId = Number(e.target.value);
+                      const selected = subCategories.find(
+                        (item) => item.id === nextId
+                      );
+
+                      setSubCategoryId(nextId);
+                      setSubCategory(selected?.name || "");
+                    }}
+                    disabled={subCategories.length === 0}
+                    className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60 lg:text-[16px]"
+                  >
+                    {subCategories.length === 0 ? (
+                      <>
+                        <option value="">No sub category available</option>
+                        <button
+                          type="button"
+                          onClick={() => { setSubCategoryName(""); setShowSubCategoryModal(true); }}
+                          className="flex shrink-0 p-1 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf]"
+                          title="Add Sub Category"
+                        >
+                          Add Sub Category
+                        </button>
+                      </>
+                    ) : (
+                      subCategories.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+
+                  <SelectArrow />
+                </div>
+                {/* )} */}
+              </div>
+              {/* )} */}
             </div>
 
 
