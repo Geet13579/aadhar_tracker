@@ -264,6 +264,8 @@ export default function Home() {
   const [pointRemark, setPointRemark] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
 
+  const [success, setSuccess] = useState("");
+
   const loadSubjects = async (nextCategoryId: number) => {
     const rawSubjects = await api<unknown>(`/categories/${nextCategoryId}/subjects`);
     const mapped = asArray<unknown>(rawSubjects).map(mapSubject);
@@ -419,6 +421,8 @@ export default function Home() {
       setProject(newTeam.name);
       setTeamName("");
       setShowTeamModal(false);
+      setSuccess("Work/Project added successfully");
+      setTimeout(() => setSuccess(""), 2000);
       await loadCategories(newTeam.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create team/project");
@@ -494,6 +498,8 @@ export default function Home() {
       );
       setSubCategoryName("");
       setShowSubCategoryModal(false);
+      setSuccess("Sub Category added successfully");
+      setTimeout(() => setSuccess(""), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create sub category");
     } finally {
@@ -553,6 +559,11 @@ export default function Home() {
       // Show only the clean backend message, e.g.
       // "Subject cannot be edited after 1 hour."
       setError(message);
+
+
+      setInterval(() => {
+        setError("");
+      }, 3000);
 
       // The server rejected the edit, so reload the original subject
       // data instead of leaving the optimistic/stale value on screen.
@@ -648,11 +659,39 @@ export default function Home() {
         <div className=" mb-2 mt-2 overflow-hidden rounded-[22px] bg-[#263746]">
 
           {/* HEADER */}
-          <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-[#536679] px-4">
-            <h1 className="text-[21px] font-normal">User Portal</h1>
+          <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-blue-900 px-4">
+            <h1 className="text-[21px] font-normal">Project Status Tracker</h1>
           </header>
 
+
+
+
+
+
+
+
           <section className="px-4 py-4 md:px-6 md:py-5 lg:px-8 lg:py-6">
+            {success && (
+              <div
+                role="alert"
+                className="mb-3 flex items-start justify-between gap-3 rounded-md border border-green-400/40 bg-green-500/10 px-3 py-3 text-sm text-green-200"
+              >
+                <div className="flex min-w-0 items-start gap-2">
+                  <span className="mt-[1px] shrink-0">⚠️</span>
+                  <p className="break-words">{success}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSuccess("")}
+                  className="shrink-0 text-lg leading-none text-green-200/70 hover:text-white"
+                  aria-label="Close success"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
               {/* WORK / PROJECT / TEAM */}

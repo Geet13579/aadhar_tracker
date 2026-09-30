@@ -741,9 +741,9 @@ export default function HAPortal() {
                 {/* Portal */}
                 <div className=" mb-2 mt-2 overflow-hidden rounded-[22px] bg-[#263746]">
                     {/* HEADER */}
-                    <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-[#536679] px-4">
+                    <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-green-800 px-4">
                         <h1 className="text-[21px] font-normal">
-                            HA Portal
+                            Project Status Tracker
                         </h1>
                     </header>
 
@@ -1288,9 +1288,7 @@ function SubjectCard({
                                                 )}
                                             </div>
                                         ) : (
-                                            <p className="text-[11px] leading-4 text-[#c8d0d5]">
-                                                HA Remark : No remark
-                                            </p>
+                                            ""
                                         )}
                                     </div>
                                 </div>
