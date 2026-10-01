@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import PointInfoModal from "./components/PointInfoModal";
 import formatRemarkDate from "./components/date_formate";
-
+import EditPointModal from "./components/EditPointModal";
+import AITextActions from "./components/AITextActions";
 type Remark = {
   id?: number;
   remark: string;
@@ -243,6 +244,8 @@ export default function Home() {
   const [category, setCategory] = useState("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingSubCategories, setLoadingSubCategories] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [openSubjects, setOpenSubjects] = useState<number[]>([]);
@@ -262,136 +265,246 @@ export default function Home() {
   const [pointSubjectId, setPointSubjectId] = useState<number | null>(null);
   const [pointName, setPointName] = useState("");
   const [pointRemark, setPointRemark] = useState("");
+  const [aiEnhancing, setAiEnhancing] = useState(false);
+  const [originalPointName, setOriginalPointName] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
+  const [editingPoint, setEditingPoint] = useState<Point | null>(null);
 
   const [success, setSuccess] = useState("");
 
-  const loadSubjects = async (nextCategoryId: number) => {
-    const rawSubjects = await api<unknown>(`/categories/${nextCategoryId}/subjects`);
+  /**
+   * Subjects belong to the currently selected level:
+   * - Category subjects when the category has no sub-categories.
+   * - Sub-category subjects when a sub-category is selected.
+   *
+   * The API is always the source of truth; no subject data is hard-coded.
+   */
+  const loadSubjects = async (
+    nextCategoryId: number,
+    nextSubCategoryId: number | null = null,
+  ) => {
+    const endpoint = nextSubCategoryId
+      ? `/categories/${nextSubCategoryId}/subjects`
+      : `/categories/${nextCategoryId}/subjects`;
+
+    const rawSubjects = await api<unknown>(endpoint);
     const mapped = asArray<unknown>(rawSubjects).map(mapSubject);
-    const withPoints = await Promise.all(mapped.map(async (subject) => {
-      try {
-        const rawPoints = await api<unknown>(`/subjects/${subject.id}/points`);
-        const points = asArray<unknown>(rawPoints).map(mapPoint);
-        return { ...subject, points };
-      } catch {
-        return subject;
-      }
-    }));
+
+    const withPoints = await Promise.all(
+      mapped.map(async (subject) => {
+        try {
+          const rawPoints = await api<unknown>(`/subjects/${subject.id}/points`);
+          const points = asArray<unknown>(rawPoints).map(mapPoint);
+          return { ...subject, points };
+        } catch {
+          return subject;
+        }
+      }),
+    );
+
     setSubjects(withPoints);
     setOpenSubjects(withPoints.length ? [withPoints[0].id] : []);
   };
 
-  const loadSubCategories = async (nextCategoryId: number) => {
-    const raw = await api<unknown>(`/categories/${nextCategoryId}/subcategories`);
-    const mapped = asArray<unknown>(raw).map((item) => {
-      const data = (item || {}) as Record<string, unknown>;
-      return {
-        id: getId(data),
-        name: getName(data),
-        categoryId: nextCategoryId,
-      };
-    });
+  const reloadCurrentSubjects = async () => {
+    if (!categoryId) {
+      setSubjects([]);
+      return;
+    }
 
-    setSubCategories(mapped);
-    if (mapped.length) {
-      setSubCategoryId(mapped[0].id);
-      setSubCategory(mapped[0].name);
-    } else {
+    const currentCategory = categories.find((item) => item.id === categoryId);
+    const hasSubCategories = currentCategory?.hasSubCategories === true;
+
+    await loadSubjects(
+      categoryId,
+      hasSubCategories ? subCategoryId : null,
+    );
+  };
+
+  const loadSubCategories = async (nextCategoryId: number) => {
+    setLoadingSubCategories(true);
+    try {
+      const raw = await api<unknown>(
+        `/categories/${nextCategoryId}/subcategories`,
+      );
+
+      const mapped = asArray<unknown>(raw).map((item) => {
+        const data = (item || {}) as Record<string, unknown>;
+
+        return {
+          id: getId(data),
+          name: getName(data),
+          categoryId: nextCategoryId,
+        };
+      });
+
+      setSubCategories(mapped);
+
+      // Do NOT auto-select a sub-category.
+      // Subjects must only be fetched after the user explicitly selects one.
       setSubCategoryId(null);
       setSubCategory("");
+      setSubjects([]);
+      setOpenSubjects([]);
+    } finally {
+      setLoadingSubCategories(false);
     }
   };
 
   const loadCategories = async (nextTeamId: number) => {
-    const rawCategories = await api<unknown>(`/teams/${nextTeamId}/categories`);
-    const mapped = asArray<unknown>(rawCategories).map((item) => {
-      const data = (item || {}) as Record<string, unknown>;
-      return {
-        id: getId(data),
-        name: getName(data),
-        teamId: nextTeamId,
-        hasSubCategories: Boolean(data.hasSubCategories),
-      };
-    });
+    setLoadingCategories(true);
+    try {
+      const rawCategories = await api<unknown>(
+        `/teams/${nextTeamId}/categories`,
+      );
 
-    setCategories(mapped);
+      const mapped = asArray<unknown>(rawCategories).map((item) => {
+        const data = (item || {}) as Record<string, unknown>;
 
-    if (mapped.length) {
-      const first = mapped[0];
-      setCategoryId(first.id);
-      setCategory(first.name);
+        return {
+          id: getId(data),
+          name: getName(data),
+          teamId: nextTeamId,
+          hasSubCategories: Boolean(data.hasSubCategories),
+        };
+      });
 
-      if (first.hasSubCategories) {
-        await loadSubCategories(first.id);
-      } else {
-        setSubCategories([]);
-        setSubCategoryId(null);
-        setSubCategory("");
-      }
+      setCategories(mapped);
 
-      await loadSubjects(first.id);
-    } else {
+      // Do NOT auto-select the first category.
+      // The user must explicitly select a category after selecting a team.
       setCategoryId(null);
       setCategory("");
       setSubCategories([]);
       setSubCategoryId(null);
       setSubCategory("");
       setSubjects([]);
+      setOpenSubjects([]);
+    } finally {
+      setLoadingCategories(false);
     }
   };
 
   useEffect(() => {
     const loadInitialData = async () => {
-      setLoading(true); setError("");
+      setLoading(true);
+      setError("");
+
       try {
         const rawTeams = await api<unknown>("/teams");
-        const mappedTeams = asArray<unknown>(rawTeams).map((item) => ({ id: getId(item), name: getName(item) }));
+        const mappedTeams = asArray<unknown>(rawTeams).map((item) => ({
+          id: getId(item),
+          name: getName(item),
+        }));
+
+        // Only load the project/team list on first render.
+        // Nothing is selected automatically.
         setTeams(mappedTeams);
-        if (mappedTeams.length) { const firstTeam = mappedTeams[0]; setTeamId(firstTeam.id); setProject(firstTeam.name); await loadCategories(firstTeam.id); }
-      } catch (err) { setError(err instanceof Error ? err.message : "Unable to load data"); }
-      finally { setLoading(false); }
+        setTeamId(null);
+        setProject("");
+        setCategories([]);
+        setCategoryId(null);
+        setCategory("");
+        setSubCategories([]);
+        setSubCategoryId(null);
+        setSubCategory("");
+        setSubjects([]);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Unable to load data",
+        );
+      } finally {
+        setLoading(false);
+      }
     };
+
     void loadInitialData();
   }, []);
 
   const handleTeamChange = async (nextTeamId: number) => {
     const selected = teams.find((team) => team.id === nextTeamId);
+
     setTeamId(nextTeamId);
     setProject(selected?.name || "");
     setError("");
 
+    // Clear dependent data immediately so old subjects never remain
+    // visible while the new team/category data is loading.
+    setCategories([]);
+    setCategoryId(null);
+    setCategory("");
+    setSubCategories([]);
+    setSubCategoryId(null);
+    setSubCategory("");
+    setSubjects([]);
+    setOpenSubjects([]);
+
     try {
       await loadCategories(nextTeamId);
     } catch (err) {
-      setCategories([]);
-      setCategoryId(null);
-      setCategory("");
-      setSubCategories([]);
-      setSubCategoryId(null);
-      setSubCategory("");
-      setSubjects([]);
-      setError(err instanceof Error ? err.message : "Unable to load categories");
+      setError(
+        err instanceof Error ? err.message : "Unable to load categories",
+      );
     }
   };
 
   const handleCategoryChange = async (nextCategoryId: number) => {
-    const selected = categories.find((item) => item.id === nextCategoryId);
+    const selected = categories.find(
+      (item) => item.id === nextCategoryId,
+    );
+
     setCategoryId(nextCategoryId);
     setCategory(selected?.name || "");
     setSubCategories([]);
     setSubCategoryId(null);
     setSubCategory("");
+    setSubjects([]);
+    setOpenSubjects([]);
     setError("");
 
+    if (!selected) return;
+
     try {
-      if (selected?.hasSubCategories) {
+      if (selected.hasSubCategories) {
+        // Only fetch the sub-category list here.
+        // Do not fetch subjects until the user selects a sub-category.
         await loadSubCategories(nextCategoryId);
+      } else {
+        // No sub-category: load subjects directly from the category.
+        await loadSubjects(nextCategoryId, null);
       }
-      await loadSubjects(nextCategoryId);
     } catch (err) {
       setSubjects([]);
-      setError(err instanceof Error ? err.message : "Unable to load category");
+      setError(
+        err instanceof Error ? err.message : "Unable to load category",
+      );
+    }
+  };
+
+  const handleSubCategoryChange = async (nextSubCategoryId: number) => {
+    const selected = subCategories.find(
+      (item) => item.id === nextSubCategoryId,
+    );
+
+    setSubCategoryId(nextSubCategoryId);
+    setSubCategory(selected?.name || "");
+    setSubjects([]);
+    setOpenSubjects([]);
+    setError("");
+
+    if (!categoryId || !selected) return;
+
+    try {
+      // This was the missing piece: changing the sub-category
+      // now fetches the subjects belonging to that sub-category.
+      await loadSubjects(categoryId, nextSubCategoryId);
+    } catch (err) {
+      setSubjects([]);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load sub category subjects",
+      );
     }
   };
 
@@ -462,7 +575,12 @@ export default function Home() {
       setSubCategory("");
       setCategoryName("");
       setShowCategoryModal(false);
-      await loadSubjects(newCategory.id);
+
+      if (newCategory.hasSubCategories) {
+        await loadSubCategories(newCategory.id);
+      } else {
+        await loadSubjects(newCategory.id, null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create category");
     } finally {
@@ -500,6 +618,36 @@ export default function Home() {
       setShowSubCategoryModal(false);
       setSuccess("Sub Category added successfully");
       setTimeout(() => setSuccess(""), 2000);
+
+      // Reload the complete sub-category list from the backend and
+      // make the newly-created sub-category the active context.
+      const refreshed = await api<unknown>(
+        `/categories/${categoryId}/subcategories`,
+      );
+
+      const refreshedSubCategories = asArray<unknown>(refreshed).map(
+        (item) => {
+          const value = (item || {}) as Record<string, unknown>;
+
+          return {
+            id: getId(value),
+            name: getName(value),
+            categoryId,
+          };
+        },
+      );
+
+      setSubCategories(refreshedSubCategories);
+
+      const activeSubCategory =
+        refreshedSubCategories.find(
+          (item) => item.id === newSubCategory.id,
+        ) ?? newSubCategory;
+
+      setSubCategoryId(activeSubCategory.id);
+      setSubCategory(activeSubCategory.name);
+
+      await loadSubjects(categoryId, activeSubCategory.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create sub category");
     } finally {
@@ -509,11 +657,44 @@ export default function Home() {
 
   const handleAddSubject = async () => {
     const name = subjectName.trim();
+
     if (!name || !categoryId || saving) return;
-    setSaving(true); setError("");
-    try { await api(`/categories/${categoryId}/subjects`, { method: "POST", body: JSON.stringify({ name }) }); await loadSubjects(categoryId); setSubjectName(""); setShowSubjectModal(false); }
-    catch (err) { setError(err instanceof Error ? err.message : "Unable to create subject"); }
-    finally { setSaving(false); }
+
+    const currentCategory = categories.find(
+      (item) => item.id === categoryId,
+    );
+
+    const activeSubCategoryId =
+      currentCategory?.hasSubCategories ? subCategoryId : null;
+
+    if (currentCategory?.hasSubCategories && !activeSubCategoryId) {
+      setError("Please select a sub category before adding a subject");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const endpoint = activeSubCategoryId
+        ? `/categories/${activeSubCategoryId}/subjects`
+        : `/categories/${categoryId}/subjects`;
+
+      await api(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+
+      await loadSubjects(categoryId, activeSubCategoryId);
+      setSubjectName("");
+      setShowSubjectModal(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to create subject",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteSubject = (id: number) => {
@@ -537,14 +718,13 @@ export default function Home() {
         method: "PATCH",
         body: JSON.stringify({
           name,
-          status: "TODO",
         }),
       });
 
       // Always reload from the server after a successful update.
       // This keeps the UI in sync with the backend.
       if (categoryId) {
-        await loadSubjects(categoryId);
+        await reloadCurrentSubjects();
       }
 
       setEditingId(null);
@@ -569,7 +749,7 @@ export default function Home() {
       // data instead of leaving the optimistic/stale value on screen.
       if (categoryId) {
         try {
-          await loadSubjects(categoryId);
+          await reloadCurrentSubjects();
         } catch {
           // Keep the original edit error visible if reload also fails.
         }
@@ -583,8 +763,93 @@ export default function Home() {
   };
 
   const openPointForm = (subjectId: number) => {
-    setPointSubjectId(subjectId); setPointName(""); setPointRemark("");
+    setPointSubjectId(subjectId); setPointName(""); setPointRemark(""); setOriginalPointName("");
     if (!openSubjects.includes(subjectId)) setOpenSubjects((prev) => [...prev, subjectId]);
+  };
+
+  const typewriterEffect = (
+    text: string,
+    onUpdate: (value: string) => void,
+    speed = 15
+  ): Promise<void> => {
+    return new Promise((resolve) => {
+      let index = 0;
+
+      const interval = setInterval(() => {
+        index += 1;
+
+        onUpdate(text.slice(0, index));
+
+        if (index >= text.length) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, speed);
+    });
+  };
+  const handleEnhancePointDescription = async () => {
+    const description = pointName.trim();
+
+    if (!description || aiEnhancing || saving) {
+      return;
+    }
+
+    setAiEnhancing(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/ai/enhance-description", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          description,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        enhancedDescription?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data.enhancedDescription) {
+        throw new Error(
+          data.error || "Unable to enhance description"
+        );
+      }
+
+      const enhancedText = data.enhancedDescription.trim();
+
+      // Save original text so Undo can restore it
+      setOriginalPointName(description);
+
+      // Clear textarea before starting typewriter effect
+      setPointName("");
+
+      // Type enhanced text character-by-character
+      await typewriterEffect(
+        enhancedText,
+        (value) => {
+          setPointName(value);
+        },
+        15
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to enhance description"
+      );
+    } finally {
+      setAiEnhancing(false);
+    }
+  };
+
+  const handleUndoEnhancement = () => {
+    if (!originalPointName) return;
+    setPointName(originalPointName);
+    setOriginalPointName("");
   };
 
   const handleAddPoint = async () => {
@@ -592,7 +857,7 @@ export default function Home() {
     const title = pointName.trim(); const remark = pointRemark.trim() || "";
     setSaving(true); setError("");
     try {
-      const rawPoint = await api<unknown>(
+      await api<unknown>(
         `/subjects/${pointSubjectId}/points`,
         {
           method: "POST",
@@ -612,9 +877,43 @@ export default function Home() {
       //     }),
       //   });
       // }
-      await loadSubjects(categoryId); setPointName(""); setPointRemark(""); setPointSubjectId(null);
+      await reloadCurrentSubjects();
+      setPointName("");
+      setPointRemark("");
+      setOriginalPointName("");
+      setPointSubjectId(null);
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to create point"); }
     finally { setSaving(false); }
+  };
+
+  const handleEditPoint = async (name: string) => {
+    if (!editingPoint || !name.trim() || saving || !categoryId) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await api(`/points/${editingPoint.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: name.trim(),
+        }),
+      });
+
+      await reloadCurrentSubjects();
+
+      setEditingPoint(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update point"
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const deletePoint = (subjectId: number, pointId: number) => {
@@ -647,20 +946,20 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen  text-white">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#2b4152_0%,#111d27_38%,#070d13_100%)] text-white">
       {/* COMPACT APP */}
-      <div className="mx-auto w-full max-w-[430px] overflow-hidden rounded-[28px]  shadow-2xl sm:max-w-[600px] md:max-w-[768px] lg:max-w-[1024px] xl:max-w-[1200px]">
+      <div className="mx-auto w-full max-w-[430px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1720]/90 shadow-[0_30px_100px_rgba(0,0,0,0.4)] backdrop-blur sm:max-w-[600px] md:max-w-[768px] lg:max-w-[1024px] xl:max-w-[1200px]">
         {/* Top bar */}
         {/* <div className="flex h-[42px] items-center justify-center">
           <div className="h-2 w-40 rounded-full bg-[#536579]" />
         </div> */}
 
         {/* Portal */}
-        <div className=" mb-2 mt-2 overflow-hidden rounded-[22px] bg-[#263746]">
+        <div className="mb-2 mt-2 overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111b24] shadow-[0_18px_55px_rgba(0,0,0,0.28)]">
 
           {/* HEADER */}
-          <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-blue-900 px-4">
-            <h1 className="text-[21px] font-normal">Project Status Tracker</h1>
+          <header className="flex h-[70px] items-center justify-between border-b border-white/10 bg-gradient-to-r from-[#163b5b] via-[#18517a] to-[#1a4160] px-5 shadow-lg">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8bd1ff]/70">Workspace</p><h1 className="text-[21px] font-bold tracking-tight text-white">Project Status Tracker</h1></div><div className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-[10px] font-semibold text-white/70">LIVE</div>
           </header>
 
 
@@ -674,7 +973,7 @@ export default function Home() {
             {success && (
               <div
                 role="alert"
-                className="mb-3 flex items-start justify-between gap-3 rounded-md border border-green-400/40 bg-green-500/10 px-3 py-3 text-sm text-green-200"
+                className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-green-300/30 bg-green-500/10 px-4 py-3 text-sm font-medium text-green-100 shadow-sm"
               >
                 <div className="flex min-w-0 items-start gap-2">
                   <span className="mt-[1px] shrink-0">⚠️</span>
@@ -693,7 +992,12 @@ export default function Home() {
             )}
 
 
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <div
+              className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${categoryId && categories.find((item) => item.id === categoryId)?.hasSubCategories
+                ? "lg:grid-cols-3"
+                : "lg:grid-cols-2"
+                }`}
+            >
               {/* WORK / PROJECT / TEAM */}
               <div className="mb-4">
                 <div className="mb-1 flex items-center justify-between gap-2">
@@ -713,17 +1017,17 @@ export default function Home() {
                 <div className="relative">
                   <select
                     value={teamId ?? ""}
-                    onChange={(e) => void handleTeamChange(Number(e.target.value))}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (value) void handleTeamChange(value);
+                    }}
                     disabled={loading || teams.length === 0}
-                    className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60 lg:text-[16px]"
+                    className="h-[48px] w-full appearance-none rounded-xl border border-white/15 bg-[#1a2a38] px-3 pr-10 text-[15px] font-medium text-white shadow-inner transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/20 disabled:opacity-50 lg:text-[16px]"
                   >
-                    {teams.length === 0 ? (
-                      <option value="">No work / project / team available</option>
-                    ) : (
-                      teams.map((team) => (
-                        <option key={team.id} value={team.id}>{team.name}</option>
-                      ))
-                    )}
+                    <option value="">Select Work / Project / Team</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
                   </select>
                   <SelectArrow />
                 </div>
@@ -756,15 +1060,18 @@ export default function Home() {
                   <select
                     value={categoryId ?? ""}
                     onChange={(e) => void handleCategoryChange(Number(e.target.value))}
-                    disabled={loading || categories.length === 0}
-                    className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60 lg:text-[16px]"
+                    disabled={loading || !teamId || loadingCategories || categories.length === 0}
+                    className="h-[48px] w-full appearance-none rounded-xl border border-white/15 bg-[#1a2a38] px-3 pr-10 text-[15px] font-medium text-white shadow-inner transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/20 disabled:opacity-50 lg:text-[16px]"
                   >
                     {categories.length === 0 ? (
-                      <option value="">No category available</option>
+                      <option value="">No categories available</option>
                     ) : (
-                      categories.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))
+                      <>
+                        <option value="">Select Category</option>
+                        {categories.map((item) => (
+                          <option key={item.id} value={item.id}>{item.name}</option>
+                        ))}
+                      </>
                     )}
                   </select>
                   <SelectArrow />
@@ -784,52 +1091,54 @@ export default function Home() {
 
               {/* SUB CATEGORY */}
               {categoryId && categories.find((item) => item.id === categoryId)?.hasSubCategories && (
-                <div className="mb-4">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <label className="block text-[14px] font-bold text-[#d9e0e5] lg:text-[18px]">
-                      Select Sub Category
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { setSubCategoryName(""); setShowSubCategoryModal(true); }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf]"
-                      title="Add Sub Category"
-                    >
-                      <PlusIcon size={14} />
-                    </button>
-                  </div>
-
-                  {categories.find((item) => item.id === categoryId)?.hasSubCategories && (
-                    <div className="relative">
-                      <select
-                        value={subCategoryId ?? ""}
-                        onChange={(e) => {
-                          const nextId = Number(e.target.value);
-                          const selected = subCategories.find(
-                            (item) => item.id === nextId
-                          );
-
-                          setSubCategoryId(nextId);
-                          setSubCategory(selected?.name || "");
-                        }}
-                        disabled={subCategories.length === 0}
-                        className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60 lg:text-[16px]"
+                <>
+                  <div className="mb-4">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="block text-[14px] font-bold text-[#d9e0e5] lg:text-[18px]">
+                        Select Sub Category
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => { setSubCategoryName(""); setShowSubCategoryModal(true); }}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf]"
+                        title="Add Sub Category"
                       >
-                        {subCategories.length === 0 ? (
-                          <option value="">No sub category available</option>
-                        ) : (
-                          subCategories.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-
-                      <SelectArrow />
+                        <PlusIcon size={14} />
+                      </button>
                     </div>
-                  )}
-                </div>
+
+                    {categories.find((item) => item.id === categoryId)?.hasSubCategories && (
+                      <>
+                        <div className="relative">
+                          <select
+                            value={subCategoryId ?? ""}
+                            onChange={(e) => {
+                              const nextId = Number(e.target.value);
+                              void handleSubCategoryChange(nextId);
+                            }}
+                            disabled={loadingSubCategories || subCategories.length === 0}
+                            className="h-[48px] w-full appearance-none rounded-xl border border-white/15 bg-[#1a2a38] px-3 pr-10 text-[15px] font-medium text-white shadow-inner transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/20 disabled:opacity-50 lg:text-[16px]"
+                          >
+                            {subCategories.length === 0 ? (
+                              <option value="">No sub categories available</option>
+                            ) : (
+                              <>
+                                <option value="">Select Sub Category</option>
+                                {subCategories.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.name}
+                                  </option>
+                                ))}
+                              </>
+                            )}
+                          </select>
+
+                          <SelectArrow />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
@@ -838,7 +1147,7 @@ export default function Home() {
             {error && (
               <div
                 role="alert"
-                className="mb-3 flex items-start justify-between gap-3 rounded-md border border-red-400/40 bg-red-500/10 px-3 py-3 text-sm text-red-200"
+                className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-red-300/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100 shadow-sm"
               >
                 <div className="flex min-w-0 items-start gap-2">
                   <span className="mt-[1px] shrink-0">⚠️</span>
@@ -856,20 +1165,24 @@ export default function Home() {
               </div>
             )}
 
-            {loading && (
+            {(loading || loadingCategories || loadingSubCategories) && (
               <div className="mb-3 rounded-md bg-black/10 px-3 py-2 text-xs text-white/60">
-                Loading teams, categories, subjects and points...
+                {loading
+                  ? "Loading teams..."
+                  : loadingCategories
+                    ? "Loading categories..."
+                    : "Loading sub categories..."}
               </div>
             )}
 
             {/* SUBJECT TITLE */}
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[21px] font-bold">Subjects :</h2>
+            <div className="mb-4 flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8bd1ff]/60">Tracking</p><h2 className="text-[22px] font-bold tracking-tight">Subjects</h2></div>
 
               <button
                 type="button"
                 onClick={() => setShowSubjectModal(true)}
-                className="flex h-5 w-5 items-center justify-center rounded bg-[#50bbaa] text-[#20303c] transition hover:bg-[#6bd0bf] active:scale-90"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#50bbaa]/40 bg-[#50bbaa]/15 text-[#72e2d0] transition hover:bg-[#50bbaa]/25 hover:scale-105 active:scale-95"
                 title="Add Subject"
               >
                 <PlusIcon size={19} />
@@ -896,6 +1209,7 @@ export default function Home() {
                     onAddPoint={() => openPointForm(subject.id)}
                     onDelete={() => handleDeleteSubject(subject.id)}
                     onInfo={(point) => setSelectedPoint(point)}
+                    onEditPoint={(point) => setEditingPoint(point)}
                     onDeletePoint={(pointId) =>
                       deletePoint(subject.id, pointId)
                     }
@@ -929,7 +1243,7 @@ export default function Home() {
               if (e.key === "Escape") setShowTeamModal(false);
             }}
             placeholder="Enter work / project / team name"
-            className="h-11 w-full rounded-md border border-white/30 bg-[#1e2d39] px-3 text-sm outline-none focus:border-[#54baff]"
+            className="h-12 w-full rounded-xl border border-white/12 bg-[#172633] px-3 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/15"
           />
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={() => setShowTeamModal(false)} className="flex-1 rounded-md border border-white/20 py-2 text-sm">Cancel</button>
@@ -953,7 +1267,7 @@ export default function Home() {
               if (e.key === "Escape") setShowCategoryModal(false);
             }}
             placeholder="Enter category name"
-            className="h-11 w-full rounded-md border border-white/30 bg-[#1e2d39] px-3 text-sm outline-none focus:border-[#54baff]"
+            className="h-12 w-full rounded-xl border border-white/12 bg-[#172633] px-3 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/15"
           />
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 rounded-md border border-white/20 py-2 text-sm">Cancel</button>
@@ -977,7 +1291,7 @@ export default function Home() {
               if (e.key === "Escape") setShowSubCategoryModal(false);
             }}
             placeholder="Enter sub category name"
-            className="h-11 w-full rounded-md border border-white/30 bg-[#1e2d39] px-3 text-sm outline-none focus:border-[#54baff]"
+            className="h-12 w-full rounded-xl border border-white/12 bg-[#172633] px-3 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/15"
           />
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={() => setShowSubCategoryModal(false)} className="flex-1 rounded-md border border-white/20 py-2 text-sm">Cancel</button>
@@ -1006,7 +1320,7 @@ export default function Home() {
               }
             }}
             placeholder="Enter subject name"
-            className="h-11 w-full rounded-md border border-white/30 bg-[#1e2d39] px-3 text-sm outline-none focus:border-[#54baff]"
+            className="h-12 w-full rounded-xl border border-white/12 bg-[#172633] px-3 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#69c9ff] focus:ring-2 focus:ring-[#54baff]/15"
           />
 
           <div className="mt-4 flex gap-2">
@@ -1036,22 +1350,75 @@ export default function Home() {
       {pointSubjectId !== null && (
         <Modal>
           <h2 className="mb-4 text-lg font-bold">Add Point</h2>
+          <div className="relative">
 
-          <textarea
-            autoFocus
+            <textarea
+              autoFocus
+              value={pointName}
+              onChange={(e) =>
+                setPointName(e.target.value)
+              }
+              placeholder="Point title / description"
+              className="
+      h-36
+      w-full
+      resize-none
+      rounded-xl
+      border
+      border-white/12
+      bg-[#172633]
+      px-3
+      py-3
+      pr-20
+      text-sm
+      leading-5
+      text-white
+      outline-none
+      placeholder:text-white/30
+      transition
+      focus:border-[#69c9ff]
+      focus:ring-2
+      focus:ring-[#54baff]/15
+    "
+            />
+
+            {originalPointName && (
+              <button
+                type="button"
+                onClick={handleUndoEnhancement}
+                className="
+        absolute
+        right-2
+        top-2
+        z-10
+        rounded-md
+        border
+        border-white/10
+        bg-[#111722]/95
+        px-2.5
+        py-1
+        text-xs
+        font-semibold
+        text-white/70
+        shadow-md
+        transition
+        hover:bg-white/10
+        hover:text-white
+      "
+              >
+                ↶ Undo
+              </button>
+            )}
+
+          </div>
+
+          <AITextActions
             value={pointName}
-            onChange={(e) => setPointName(e.target.value)}
-            placeholder="Point title"
-            className="mb-3 h-32 w-full rounded-md border border-white/30 bg-[#1e2d39] px-3 text-sm outline-none focus:border-[#54baff]"
+            onChange={setPointName}
+            disabled={saving}
+            onError={setError}
+            onUndoReady={setOriginalPointName}
           />
-
-          {/* <textarea
-            value={pointRemark}
-            onChange={(e) => setPointRemark(e.target.value)}
-            placeholder="HA Remark"
-            rows={3}
-            className="w-full resize-none rounded-md border border-white/30 bg-[#1e2d39] px-3 py-2 text-sm outline-none focus:border-[#54baff]"
-          /> */}
 
           <div className="mt-4 flex gap-2">
             <button
@@ -1063,9 +1430,10 @@ export default function Home() {
 
             <button
               onClick={handleAddPoint}
-              className="flex-1 rounded-md bg-[#50bbaa] py-2 text-sm font-bold text-[#17242d]"
+              disabled={!pointName.trim() || aiEnhancing || saving}
+              className="flex-1 rounded-md bg-[#50bbaa] py-2 text-sm font-bold text-[#17242d] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add Point
+              {saving ? "Adding..." : "Add Point"}
             </button>
           </div>
         </Modal>
@@ -1135,6 +1503,7 @@ function SubjectCard({
   onAddPoint,
   onDelete,
   onInfo,
+  onEditPoint,
   onDeletePoint,
 }: {
   subject: Subject;
@@ -1150,6 +1519,7 @@ function SubjectCard({
   onDelete: () => void;
   onInfo: (point: Point) => void;
   onDeletePoint: (pointId: number) => void;
+  onEditPoint: (point: Point) => void;
 }) {
   const colors = {
     yellow: {
@@ -1169,9 +1539,9 @@ function SubjectCard({
   const current = colors[subject.color];
 
   return (
-    <div className={`overflow-hidden border-2 ${current.border}`}>
+    <div className={`overflow-hidden rounded-2xl border ${current.border} bg-[#101b25] shadow-[0_12px_35px_rgba(0,0,0,0.2)] transition hover:-translate-y-[1px] hover:shadow-[0_16px_42px_rgba(0,0,0,0.28)]`}>
       {/* SUBJECT HEADER */}
-      <div className={`px-3 py-2 ${current.bg}`}>
+      <div className={`px-4 py-3 ${current.bg} shadow-inner`}>
         {editing ? (
           <div className="flex gap-2">
             <input
@@ -1187,6 +1557,13 @@ function SubjectCard({
             />
 
             <button
+              onClick={onCancelEdit}
+              className="rounded bg-white/20 px-2 text-xs hover:bg-white/30"
+            >
+              Cancel
+            </button>
+
+            <button
               onClick={onSaveEdit}
               className="rounded bg-white/20 px-2 text-xs hover:bg-white/30"
             >
@@ -1199,7 +1576,7 @@ function SubjectCard({
             <button
               type="button"
               onClick={onToggle}
-              className="min-w-0 flex-1 text-left"
+              className="min-w-0 flex-1 rounded-lg text-left transition hover:bg-white/[0.04]"
             >
               <h3 className="truncate text-[15px] leading-5">
                 {subject.title}
@@ -1237,7 +1614,7 @@ function SubjectCard({
 
       {/* POINT AREA */}
       {isOpen && (
-        <div className="bg-[#2b3c4c] px-3">
+        <div className="bg-[#0c1720] px-4">
           {subject.points.length === 0 ? (
             <div className="py-4 text-center text-xs text-white/40">
               No points added
@@ -1246,7 +1623,7 @@ function SubjectCard({
             subject.points.map((point, index) => (
               <div
                 key={point.id}
-                className="relative flex gap-2 py-3"
+                className="relative flex gap-3 border-b border-white/[0.06] py-4 last:border-b-0"
               >
                 {/* Timeline */}
                 <div className="relative flex w-5 shrink-0 justify-center">
@@ -1254,7 +1631,7 @@ function SubjectCard({
                     <div className="absolute left-1/2 top-5 h-full w-[2px] -translate-x-1/2 bg-[#b8c2c9]" />
                   )}
 
-                  <div className="z-10 mt-1 h-4 w-4 rounded-full border-2 border-[#d0a900] bg-[#2b3c4c]" />
+                  <div className="z-10 mt-1 h-4 w-4 rounded-full border-2 border-[#ffd84a] bg-[#172633] shadow-[0_0_0_4px_rgba(255,216,74,0.08)]" />
                 </div>
 
                 {/* Point */}
@@ -1263,20 +1640,28 @@ function SubjectCard({
                     <button
                       type="button"
                       onClick={() => onInfo(point)}
-                      className="min-w-0 flex-1 text-left"
+                      className="min-w-0 flex-1 rounded-lg text-left transition hover:bg-white/[0.04]"
                     >
-                      <p className="text-[14px] leading-5 text-[#58baff] text-justify">
+                      <p className="text-[15px] font-medium leading-6 text-[#d9efff] text-justify">
                         {point.title}
                       </p>
+                    </button>
 
-
+                    {/* EDIT POINT */}
+                    <button
+                      type="button"
+                      onClick={() => onEditPoint(point)}
+                      className="shrink-0 text-[#55baff] transition hover:scale-110"
+                      title="Edit Point"
+                    >
+                      <PencilIcon />
                     </button>
 
                     {/* INFO */}
                     <button
                       type="button"
                       onClick={() => onInfo(point)}
-                      className="shrink-0 text-[#e99a9e]"
+                      className="shrink-0"
                       title="Information"
                     >
                       <InfoIcon />
@@ -1292,7 +1677,7 @@ function SubjectCard({
                               remark.id ??
                               `${point.id}-remark-${remarkIndex}`
                             }
-                            className="rounded bg-black/10 px-2 py-1"
+                            className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2"
                           >
 
                             <div className="flex items-center justify-between gap-2">
@@ -1364,7 +1749,7 @@ function SubjectCard({
 
 function Modal({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a0f]/80 px-4 py-6 backdrop-blur-md">
       <div className="w-full max-w-[380px] rounded-xl border border-white/10 bg-[#263746] p-5 shadow-2xl">
         {children}
       </div>

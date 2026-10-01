@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import PointInfoModal from "../components/PointInfoModal";
 import formatRemarkDate from "../components/date_formate";
+import AITextActions from "../components/AITextActions";
 
 type Team = {
     id: number;
@@ -49,7 +50,7 @@ type Subject = {
 };
 
 const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL
+    process.env.NEXT_PUBLIC_API_BASE_URL;
 
 /* ---------------------------------------------------------
    API
@@ -59,18 +60,23 @@ async function api<T>(
     path: string,
     options?: RequestInit
 ): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        headers: {
-            "Content-Type": "application/json",
-            ...(options?.headers || {}),
-        },
-    });
+    const response = await fetch(
+        `${API_BASE_URL}${path}`,
+        {
+            ...options,
+            headers: {
+                "Content-Type": "application/json",
+                ...(options?.headers || {}),
+            },
+        }
+    );
 
     if (!response.ok) {
         const message = await response.text().catch(() => "");
+
         throw new Error(
-            message || `API request failed: ${response.status}`
+            message ||
+            `API request failed: ${response.status}`
         );
     }
 
@@ -90,8 +96,12 @@ function asArray<T>(value: unknown): T[] {
         return value as T[];
     }
 
-    if (value && typeof value === "object") {
-        const record = value as Record<string, unknown>;
+    if (
+        value &&
+        typeof value === "object"
+    ) {
+        const record =
+            value as Record<string, unknown>;
 
         for (const key of [
             "data",
@@ -112,10 +122,17 @@ function asArray<T>(value: unknown): T[] {
 }
 
 function unwrapData(value: unknown): unknown {
-    if (value && typeof value === "object") {
-        const record = value as Record<string, unknown>;
+    if (
+        value &&
+        typeof value === "object"
+    ) {
+        const record =
+            value as Record<string, unknown>;
 
-        if ("data" in record && record.data !== undefined) {
+        if (
+            "data" in record &&
+            record.data !== undefined
+        ) {
             return record.data;
         }
     }
@@ -132,7 +149,10 @@ function getId(value: unknown): number {
         return Number(value);
     }
 
-    if (value && typeof value === "object") {
+    if (
+        value &&
+        typeof value === "object"
+    ) {
         return Number(
             (value as Record<string, unknown>).id
         );
@@ -142,13 +162,19 @@ function getId(value: unknown): number {
 }
 
 function getName(value: unknown): string {
-    const item = (value || {}) as Record<string, unknown>;
+    const item =
+        (value || {}) as Record<string, unknown>;
 
-    return String(item.name ?? item.title ?? "");
+    return String(
+        item.name ??
+        item.title ??
+        ""
+    );
 }
 
 function getDate(value: unknown): string {
-    const item = (value || {}) as Record<string, unknown>;
+    const item =
+        (value || {}) as Record<string, unknown>;
 
     const raw =
         item.createdAt ??
@@ -203,36 +229,57 @@ function currentDate() {
 
 function mapPoint(value: unknown): Point {
     const unwrapped = unwrapData(value);
-    const item = (unwrapped || {}) as Record<string, unknown>;
+
+    const item =
+        (unwrapped || {}) as Record<string, unknown>;
 
     const rawRemarks = Array.isArray(item.remarks)
         ? item.remarks
         : [];
 
-    const remarks: Remark[] = rawRemarks.map((remark) => {
-        const r = (remark || {}) as Record<string, unknown>;
+    const remarks: Remark[] =
+        rawRemarks.map((remark) => {
+            const r =
+                (remark || {}) as Record<
+                    string,
+                    unknown
+                >;
 
-        return {
-            id: r.id != null ? Number(r.id) : undefined,
-            remark: String(r.remark ?? ""),
-            remarkBy: String(r.remarkBy ?? ""),
-            createdAt:
-                r.createdAt != null
-                    ? String(r.createdAt)
-                    : undefined,
-            created_at:
-                r.created_at != null
-                    ? String(r.created_at)
-                    : undefined,
-        };
-    });
+            return {
+                id:
+                    r.id != null
+                        ? Number(r.id)
+                        : undefined,
+
+                remark: String(
+                    r.remark ?? ""
+                ),
+
+                remarkBy: String(
+                    r.remarkBy ?? ""
+                ),
+
+                createdAt:
+                    r.createdAt != null
+                        ? String(r.createdAt)
+                        : undefined,
+
+                created_at:
+                    r.created_at != null
+                        ? String(r.created_at)
+                        : undefined,
+            };
+        });
 
     const fallbackRemark = String(
-        item.remark ?? item.haRemark ?? ""
+        item.remark ??
+        item.haRemark ??
+        ""
     );
 
     const fallbackRemarkBy = String(
-        item.remarkBy ?? "HA"
+        item.remarkBy ??
+        "HA"
     );
 
     const finalRemarks: Remark[] =
@@ -241,28 +288,46 @@ function mapPoint(value: unknown): Point {
             : fallbackRemark
                 ? [
                     {
-                        remark: fallbackRemark,
-                        remarkBy: fallbackRemarkBy,
+                        remark:
+                            fallbackRemark,
+                        remarkBy:
+                            fallbackRemarkBy,
                     },
                 ]
                 : [];
 
-    const haRemarks = finalRemarks.filter(
-        (remark) =>
-            remark.remarkBy.toUpperCase() === "HA"
-    );
+    const haRemarks =
+        finalRemarks.filter(
+            (remark) =>
+                remark.remarkBy
+                    .toUpperCase() === "HA"
+        );
 
     const selectedRemark =
         haRemarks.length > 0
-            ? haRemarks[haRemarks.length - 1]
-            : finalRemarks[finalRemarks.length - 1];
+            ? haRemarks[
+            haRemarks.length - 1
+            ]
+            : finalRemarks[
+            finalRemarks.length - 1
+            ];
 
-    const formatDate = (date: unknown) => {
+    const formatDate = (
+        date: unknown
+    ) => {
         if (!date) return "";
-        const d = new Date(String(date));
-        if (Number.isNaN(d.getTime())) return String(date);
 
-        const pad = (n: number) => String(n).padStart(2, "0");
+        const d =
+            new Date(String(date));
+
+        if (
+            Number.isNaN(d.getTime())
+        ) {
+            return String(date);
+        }
+
+        const pad = (n: number) =>
+            String(n).padStart(2, "0");
 
         return `${pad(d.getDate())}-${pad(
             d.getMonth() + 1
@@ -270,16 +335,35 @@ function mapPoint(value: unknown): Point {
             d.getHours()
         )}:${pad(d.getMinutes())}`;
     };
+
     return {
         id: getId(item.id),
+
         title: String(
-            item.name ?? item.title ?? ""
+            item.name ??
+            item.title ??
+            ""
         ),
-        remark: String(selectedRemark?.remark ?? ""),
-        remarkBy: String(selectedRemark?.remarkBy ?? ""),
+
+        remark: String(
+            selectedRemark?.remark ??
+            ""
+        ),
+
+        remarkBy: String(
+            selectedRemark?.remarkBy ??
+            ""
+        ),
+
         remarks: finalRemarks,
-        createdAt: formatDate(item.createdAt),
-        updatedAt: formatDate(item.updatedAt),
+
+        createdAt: formatDate(
+            item.createdAt
+        ),
+
+        updatedAt: formatDate(
+            item.updatedAt
+        ),
     };
 }
 
@@ -287,7 +371,11 @@ function mapSubject(
     value: unknown,
     index: number
 ): Subject {
-    const item = (value || {}) as Record<string, unknown>;
+    const item =
+        (value || {}) as Record<
+            string,
+            unknown
+        >;
 
     const status = String(
         item.status ?? ""
@@ -310,11 +398,17 @@ function mapSubject(
 
     return {
         id: getId(item.id),
+
         title: String(
-            item.name ?? item.title ?? ""
+            item.name ??
+            item.title ??
+            ""
         ),
+
         date: getDate(item),
+
         color,
+
         points: [],
     };
 }
@@ -324,95 +418,129 @@ function mapSubject(
 --------------------------------------------------------- */
 
 export default function HAPortal() {
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [categories, setCategories] = useState<Category[]>(
-        []
-    );
+    const [teams, setTeams] =
+        useState<Team[]>([]);
 
-    const [teamId, setTeamId] = useState<number | null>(
-        null
-    );
-    const [categoryId, setCategoryId] = useState<
-        number | null
-    >(null);
+    const [categories, setCategories] =
+        useState<Category[]>([]);
 
-    const [subCategories, setSubCategories] = useState<SubCategory[]>(
-        []
-    );
-    const [subCategoryId, setSubCategoryId] = useState<number | null>(
-        null
-    );
-    const [subCategory, setSubCategory] = useState("");
+    const [teamId, setTeamId] =
+        useState<number | null>(null);
 
-    const [subjects, setSubjects] = useState<Subject[]>(
-        []
-    );
+    const [categoryId, setCategoryId] =
+        useState<number | null>(null);
 
-    const [openSubjects, setOpenSubjects] = useState<
-        number[]
-    >([]);
+    const [subCategories, setSubCategories] =
+        useState<SubCategory[]>([]);
 
-    const [loading, setLoading] = useState(true);
+    const [subCategoryId, setSubCategoryId] =
+        useState<number | null>(null);
+
+    const [subCategory, setSubCategory] =
+        useState("");
+
+    const [subjects, setSubjects] =
+        useState<Subject[]>([]);
+
+    const [openSubjects, setOpenSubjects] =
+        useState<number[]>([]);
+
+    const [loading, setLoading] =
+        useState(true);
+
     const [loadingSubjects, setLoadingSubjects] =
         useState(false);
-    const [error, setError] = useState("");
+
+    const [error, setError] =
+        useState("");
 
     const [selectedPoint, setSelectedPoint] =
         useState<Point | null>(null);
 
+    /* -------------------------------------------------------
+       REMARK STATE
+    ------------------------------------------------------- */
+
     const [remarkPoint, setRemarkPoint] =
         useState<Point | null>(null);
-    const [remarkText, setRemarkText] = useState("");
+
+    const [remarkText, setRemarkText] =
+        useState("");
+
     const [savingRemark, setSavingRemark] =
         useState(false);
+
+    // AI remark enhancement
+    // Original remark for Undo
+    const [
+        originalRemarkText,
+        setOriginalRemarkText,
+    ] = useState("");
 
     /* -------------------------------------------------------
        LOAD SUBJECTS + POINTS
     ------------------------------------------------------- */
 
     const loadSubjects = async (
-        nextCategoryId: number
+        nextCategoryId: number,
+        nextSubCategoryId:
+            number | null = null
     ) => {
         setLoadingSubjects(true);
 
         try {
-            const rawSubjects = await api<unknown>(
-                `/categories/${nextCategoryId}/subjects`
-            );
+            const endpoint =
+                nextSubCategoryId
+                    ? `/categories/${nextSubCategoryId}/subjects`
+                    : `/categories/${nextCategoryId}/subjects`;
+
+            const rawSubjects =
+                await api<unknown>(
+                    endpoint
+                );
 
             const mappedSubjects =
-                asArray<unknown>(rawSubjects).map(
-                    mapSubject
-                );
+                asArray<unknown>(
+                    rawSubjects
+                ).map(mapSubject);
 
             const subjectsWithPoints =
                 await Promise.all(
-                    mappedSubjects.map(async (subject) => {
-                        try {
-                            const rawPoints =
-                                await api<unknown>(
-                                    `/subjects/${subject.id}/points`
-                                );
+                    mappedSubjects.map(
+                        async (subject) => {
+                            try {
+                                const rawPoints =
+                                    await api<unknown>(
+                                        `/subjects/${subject.id}/points`
+                                    );
 
-                            return {
-                                ...subject,
-                                points:
-                                    asArray<unknown>(
-                                        rawPoints
-                                    ).map(mapPoint),
-                            };
-                        } catch {
-                            return subject;
+                                return {
+                                    ...subject,
+
+                                    points:
+                                        asArray<unknown>(
+                                            rawPoints
+                                        ).map(
+                                            mapPoint
+                                        ),
+                                };
+                            } catch {
+                                return subject;
+                            }
                         }
-                    })
+                    )
                 );
 
-            setSubjects(subjectsWithPoints);
+            setSubjects(
+                subjectsWithPoints
+            );
 
-            // Original HA Portal opens the first subject.
             setOpenSubjects(
                 subjectsWithPoints.length
-                    ? [subjectsWithPoints[0].id]
+                    ? [
+                        subjectsWithPoints[0]
+                            .id,
+                    ]
                     : []
             );
         } finally {
@@ -427,30 +555,38 @@ export default function HAPortal() {
     const loadSubCategories = async (
         nextCategoryId: number
     ) => {
-        const rawSubCategories = await api<unknown>(
-            `/categories/${nextCategoryId}/subcategories`
-        );
+        const rawSubCategories =
+            await api<unknown>(
+                `/categories/${nextCategoryId}/subcategories`
+            );
 
         const mappedSubCategories =
-            asArray<unknown>(rawSubCategories).map((item) => {
-                const data = (item || {}) as Record<string, unknown>;
+            asArray<unknown>(
+                rawSubCategories
+            ).map((item) => {
+                const data =
+                    (item || {}) as Record<
+                        string,
+                        unknown
+                    >;
 
                 return {
                     id: getId(data),
                     name: getName(data),
-                    categoryId: nextCategoryId,
+                    categoryId:
+                        nextCategoryId,
                 };
             });
 
-        setSubCategories(mappedSubCategories);
+        setSubCategories(
+            mappedSubCategories
+        );
 
-        if (mappedSubCategories.length) {
-            setSubCategoryId(mappedSubCategories[0].id);
-            setSubCategory(mappedSubCategories[0].name);
-        } else {
-            setSubCategoryId(null);
-            setSubCategory("");
-        }
+        setSubCategoryId(null);
+        setSubCategory("");
+
+        setSubjects([]);
+        setOpenSubjects([]);
     };
 
     /* -------------------------------------------------------
@@ -460,53 +596,43 @@ export default function HAPortal() {
     const loadCategories = async (
         nextTeamId: number
     ) => {
-        const rawCategories = await api<unknown>(
-            `/teams/${nextTeamId}/categories`
-        );
-
-        const mappedCategories =
-            asArray<unknown>(rawCategories).map(
-                (item) => {
-                    const data = (item || {}) as Record<string, unknown>;
-
-                    return {
-                        id: getId(data),
-                        name: getName(data),
-                        teamId: nextTeamId,
-                        hasSubCategories: Boolean(data.hasSubCategories),
-                    };
-                }
+        const rawCategories =
+            await api<unknown>(
+                `/teams/${nextTeamId}/categories`
             );
 
-        setCategories(mappedCategories);
+        const mappedCategories =
+            asArray<unknown>(
+                rawCategories
+            ).map((item) => {
+                const data =
+                    (item || {}) as Record<
+                        string,
+                        unknown
+                    >;
 
-        if (mappedCategories.length) {
-            const firstCategory = mappedCategories[0];
+                return {
+                    id: getId(data),
+                    name: getName(data),
+                    teamId:
+                        nextTeamId,
+                    hasSubCategories:
+                        Boolean(
+                            data.hasSubCategories
+                        ),
+                };
+            });
 
-            setCategoryId(firstCategory.id);
+        setCategories(
+            mappedCategories
+        );
 
-            if (firstCategory.hasSubCategories) {
-                try {
-                    await loadSubCategories(firstCategory.id);
-                } catch {
-                    setSubCategories([]);
-                    setSubCategoryId(null);
-                    setSubCategory("");
-                }
-            } else {
-                setSubCategories([]);
-                setSubCategoryId(null);
-                setSubCategory("");
-            }
-
-            await loadSubjects(firstCategory.id);
-        } else {
-            setCategoryId(null);
-            setSubCategories([]);
-            setSubCategoryId(null);
-            setSubCategory("");
-            setSubjects([]);
-        }
+        setCategoryId(null);
+        setSubCategories([]);
+        setSubCategoryId(null);
+        setSubCategory("");
+        setSubjects([]);
+        setOpenSubjects([]);
     };
 
     /* -------------------------------------------------------
@@ -514,43 +640,51 @@ export default function HAPortal() {
     ------------------------------------------------------- */
 
     useEffect(() => {
-        const loadInitialData = async () => {
-            setLoading(true);
-            setError("");
+        const loadInitialData =
+            async () => {
+                setLoading(true);
+                setError("");
 
-            try {
-                const rawTeams =
-                    await api<unknown>("/teams");
+                try {
+                    const rawTeams =
+                        await api<unknown>(
+                            "/teams"
+                        );
 
-                const mappedTeams =
-                    asArray<unknown>(rawTeams).map(
-                        (item) => ({
-                            id: getId(item),
-                            name: getName(item),
-                        })
+                    const mappedTeams =
+                        asArray<unknown>(
+                            rawTeams
+                        ).map(
+                            (item) => ({
+                                id: getId(item),
+                                name: getName(
+                                    item
+                                ),
+                            })
+                        );
+
+                    setTeams(
+                        mappedTeams
                     );
 
-                setTeams(mappedTeams);
-
-                if (mappedTeams.length) {
-                    const firstTeam = mappedTeams[0];
-
-                    setTeamId(firstTeam.id);
-
-                    await loadCategories(
-                        firstTeam.id
+                    setTeamId(null);
+                    setCategories([]);
+                    setCategoryId(null);
+                    setSubCategories([]);
+                    setSubCategoryId(null);
+                    setSubCategory("");
+                    setSubjects([]);
+                    setOpenSubjects([]);
+                } catch (err) {
+                    setError(
+                        err instanceof Error
+                            ? err.message
+                            : "Unable to load HA Portal"
                     );
+                } finally {
+                    setLoading(false);
                 }
-            } catch (err) {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Unable to load HA Portal"
-                );
-            } finally {
-                setLoading(false);
-            }
-        };
+            };
 
         void loadInitialData();
     }, []);
@@ -571,7 +705,9 @@ export default function HAPortal() {
         setError("");
 
         try {
-            await loadCategories(nextTeamId);
+            await loadCategories(
+                nextTeamId
+            );
         } catch (err) {
             setError(
                 err instanceof Error
@@ -585,59 +721,148 @@ export default function HAPortal() {
        CATEGORY CHANGE
     ------------------------------------------------------- */
 
-    const handleCategoryChange = async (
-        nextCategoryId: number
-    ) => {
-        const selectedCategory = categories.find(
-            (item) => item.id === nextCategoryId
-        );
+    const handleCategoryChange =
+        async (
+            nextCategoryId: number
+        ) => {
+            const selectedCategory =
+                categories.find(
+                    (item) =>
+                        item.id ===
+                        nextCategoryId
+                );
 
-        setCategoryId(nextCategoryId);
-        setSubCategories([]);
-        setSubCategoryId(null);
-        setSubCategory("");
-        setSubjects([]);
-        setError("");
+            setCategoryId(
+                nextCategoryId
+            );
 
-        try {
-            if (selectedCategory?.hasSubCategories) {
-                await loadSubCategories(nextCategoryId);
+            setSubCategories([]);
+            setSubCategoryId(null);
+            setSubCategory("");
+            setSubjects([]);
+            setOpenSubjects([]);
+            setError("");
+
+            if (!selectedCategory) {
+                return;
             }
 
-            await loadSubjects(nextCategoryId);
-        } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Unable to load category"
+            try {
+                if (
+                    selectedCategory.hasSubCategories
+                ) {
+                    await loadSubCategories(
+                        nextCategoryId
+                    );
+                } else {
+                    await loadSubjects(
+                        nextCategoryId,
+                        null
+                    );
+                }
+            } catch (err) {
+                setSubCategories([]);
+                setSubjects([]);
+
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Unable to load category"
+                );
+            }
+        };
+
+    /* -------------------------------------------------------
+       SUB CATEGORY CHANGE
+    ------------------------------------------------------- */
+
+    const handleSubCategoryChange =
+        async (
+            nextSubCategoryId: number
+        ) => {
+            const selectedSubCategory =
+                subCategories.find(
+                    (item) =>
+                        item.id ===
+                        nextSubCategoryId
+                );
+
+            setSubCategoryId(
+                nextSubCategoryId
             );
-        }
-    };
+
+            setSubCategory(
+                selectedSubCategory?.name ||
+                ""
+            );
+
+            setSubjects([]);
+            setOpenSubjects([]);
+            setError("");
+
+            if (
+                !categoryId ||
+                !selectedSubCategory
+            ) {
+                return;
+            }
+
+            try {
+                await loadSubjects(
+                    categoryId,
+                    nextSubCategoryId
+                );
+            } catch (err) {
+                setSubjects([]);
+
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Unable to load sub category subjects"
+                );
+            }
+        };
 
     /* -------------------------------------------------------
        SUBJECT OPEN / CLOSE
     ------------------------------------------------------- */
 
-    const toggleSubject = (id: number) => {
-        setOpenSubjects((previous) =>
-            previous.includes(id)
-                ? previous.filter(
-                    (item) => item !== id
-                )
-                : [...previous, id]
+    const toggleSubject = (
+        id: number
+    ) => {
+        setOpenSubjects(
+            (previous) =>
+                previous.includes(id)
+                    ? previous.filter(
+                        (item) =>
+                            item !== id
+                    )
+                    : [
+                        ...previous,
+                        id,
+                    ]
         );
     };
 
     /* -------------------------------------------------------
-       REMARK
+       OPEN REMARK
     ------------------------------------------------------- */
 
-    const openRemark = (point: Point) => {
+    const openRemark = (
+        point: Point
+    ) => {
         setRemarkPoint(point);
-        setRemarkText(point.remark || "");
+
+        setRemarkText(
+            point.remark || ""
+        );
+
+        setOriginalRemarkText("");
     };
 
-
+    /* -------------------------------------------------------
+       SAVE REMARK
+    ------------------------------------------------------- */
 
     const saveRemark = async () => {
         if (
@@ -653,71 +878,117 @@ export default function HAPortal() {
 
         try {
             const newRemark: Remark = {
-                remark: remarkText.trim(),
+                remark:
+                    remarkText.trim(),
+
                 remarkBy: "HA",
             };
 
-            // This POST creates a NEW remark. Existing remarks remain unchanged.
-            const rawCreated = await api<unknown>(
-                `/points/${remarkPoint.id}/remarks`,
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        remark: newRemark.remark,
-                        remarkBy: newRemark.remarkBy,
-                    }),
-                }
-            );
+            // Create NEW remark
+            // Existing remarks remain unchanged.
+            const rawCreated =
+                await api<unknown>(
+                    `/points/${remarkPoint.id}/remarks`,
+                    {
+                        method: "POST",
 
-            const created = unwrapData(rawCreated);
+                        body: JSON.stringify({
+                            remark:
+                                newRemark.remark,
+
+                            remarkBy:
+                                newRemark.remarkBy,
+                        }),
+                    }
+                );
+
+            const created =
+                unwrapData(
+                    rawCreated
+                );
 
             if (
                 created &&
-                typeof created === "object"
+                typeof created ===
+                "object"
             ) {
-                const item = created as Record<string, unknown>;
+                const item =
+                    created as Record<
+                        string,
+                        unknown
+                    >;
 
                 newRemark.id =
                     item.id != null
-                        ? Number(item.id)
+                        ? Number(
+                            item.id
+                        )
                         : undefined;
 
                 newRemark.createdAt =
-                    item.createdAt != null
-                        ? String(item.createdAt)
-                        : item.created_at != null
-                            ? String(item.created_at)
+                    item.createdAt !=
+                        null
+                        ? String(
+                            item.createdAt
+                        )
+                        : item.created_at !=
+                            null
+                            ? String(
+                                item.created_at
+                            )
                             : undefined;
 
                 newRemark.created_at =
-                    item.created_at != null
-                        ? String(item.created_at)
+                    item.created_at !=
+                        null
+                        ? String(
+                            item.created_at
+                        )
                         : undefined;
             }
 
-            // Append the new remark; never replace the previous history.
-            setSubjects((previous) =>
-                previous.map((subject) => ({
-                    ...subject,
-                    points: subject.points.map(
-                        (point) =>
-                            point.id === remarkPoint.id
-                                ? {
-                                    ...point,
-                                    remark: newRemark.remark,
-                                    remarkBy: "HA",
-                                    remarks: [
-                                        ...(point.remarks || []),
-                                        newRemark,
-                                    ],
-                                }
-                                : point
-                    ),
-                }))
+            // Append new remark
+            setSubjects(
+                (previous) =>
+                    previous.map(
+                        (subject) => ({
+                            ...subject,
+
+                            points:
+                                subject.points.map(
+                                    (point) =>
+                                        point.id ===
+                                            remarkPoint.id
+                                            ? {
+                                                ...point,
+
+                                                remark:
+                                                    newRemark.remark,
+
+                                                remarkBy:
+                                                    "HA",
+
+                                                remarks:
+                                                    [
+                                                        ...(point.remarks ||
+                                                            []),
+
+                                                        newRemark,
+                                                    ],
+                                            }
+                                            : point
+                                ),
+                        })
+                    )
             );
 
+            // Close modal
             setRemarkPoint(null);
+
             setRemarkText("");
+
+            setOriginalRemarkText("");
+
         } catch (err) {
             setError(
                 err instanceof Error
@@ -729,19 +1000,19 @@ export default function HAPortal() {
         }
     };
 
-    return (
-        <main className="min-h-screen  text-white">
-            {/* COMPACT APP */}
-            <div className="mx-auto w-full max-w-[430px] overflow-hidden rounded-[28px]  shadow-2xl sm:max-w-[600px] md:max-w-[768px] lg:max-w-[1024px] xl:max-w-[1200px]">
-                {/* Top bar */}
-                {/* <div className="flex h-[42px] items-center justify-center">
-          <div className="h-2 w-40 rounded-full bg-[#536579]" />
-        </div> */}
+    /* -------------------------------------------------------
+       RENDER
+    ------------------------------------------------------- */
 
-                {/* Portal */}
-                <div className=" mb-2 mt-2 overflow-hidden rounded-[22px] bg-[#263746]">
+    return (
+        <main className="min-h-screen bg-[radial-gradient(circle_at_top,#243747_0%,#0d1720_42%,#070d13_100%)] text-white">
+            <div className="mx-auto w-full max-w-[430px] overflow-hidden rounded-[28px] border border-white/[0.06] bg-[#0d1720]/80 shadow-[0_30px_100px_rgba(0,0,0,0.35)] backdrop-blur sm:max-w-[600px] md:max-w-[768px] lg:max-w-[1024px] xl:max-w-[1200px]">
+
+                {/* PORTAL */}
+                <div className="mb-2 mt-2 overflow-hidden rounded-[22px] border border-white/[0.06] bg-[#263746]/95 shadow-[0_16px_50px_rgba(0,0,0,0.28)]">
+
                     {/* HEADER */}
-                    <header className="flex h-[58px] items-center border-b-2 border-[#9aa9b6] bg-green-800 px-4">
+                    <header className="flex h-[68px] items-center justify-between border-b border-white/10 bg-gradient-to-r from-[#18334d] via-[#173a55] to-[#193f5a] px-5 shadow-lg">
                         <h1 className="text-[21px] font-normal">
                             Project Status Tracker
                         </h1>
@@ -749,7 +1020,17 @@ export default function HAPortal() {
 
                     {/* CONTENT */}
                     <section className="px-4 py-4">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-3">
+
+                        <div
+                            className={`grid grid-cols-1 lg:gap-3 ${categories.find(
+                                (item) =>
+                                    item.id ===
+                                    categoryId
+                            )?.hasSubCategories
+                                ? "lg:grid-cols-3"
+                                : "lg:grid-cols-2"
+                                }`}
+                        >
 
                             {/* PROJECT */}
                             <div className="mb-3">
@@ -759,31 +1040,46 @@ export default function HAPortal() {
 
                                 <div className="relative">
                                     <select
-                                        value={teamId ?? ""}
+                                        value={
+                                            teamId ??
+                                            ""
+                                        }
                                         onChange={(e) =>
                                             void handleTeamChange(
-                                                Number(e.target.value)
+                                                Number(
+                                                    e.target
+                                                        .value
+                                                )
                                             )
                                         }
                                         disabled={
                                             loading ||
-                                            teams.length === 0
+                                            teams.length ===
+                                            0
                                         }
-                                        className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60"
+                                        className="h-[46px] w-full appearance-none rounded-xl border border-white/10 bg-[#172633] px-3 pr-9 text-[15px] text-white outline-none shadow-inner transition focus:border-[#54baff] focus:ring-2 focus:ring-[#54baff]/15 disabled:opacity-50"
                                     >
-                                        {teams.length === 0 ? (
-                                            <option value="">
-                                                No project available
-                                            </option>
-                                        ) : (
-                                            teams.map((team) => (
+                                        <option value="">
+                                            Select Project
+                                        </option>
+
+                                        {teams.map(
+                                            (
+                                                team
+                                            ) => (
                                                 <option
-                                                    key={team.id}
-                                                    value={team.id}
+                                                    key={
+                                                        team.id
+                                                    }
+                                                    value={
+                                                        team.id
+                                                    }
                                                 >
-                                                    {team.name}
+                                                    {
+                                                        team.name
+                                                    }
                                                 </option>
-                                            ))
+                                            )
                                         )}
                                     </select>
 
@@ -799,31 +1095,51 @@ export default function HAPortal() {
 
                                 <div className="relative">
                                     <select
-                                        value={categoryId ?? ""}
+                                        value={
+                                            categoryId ??
+                                            ""
+                                        }
                                         onChange={(e) =>
                                             void handleCategoryChange(
-                                                Number(e.target.value)
+                                                Number(
+                                                    e.target
+                                                        .value
+                                                )
                                             )
                                         }
                                         disabled={
                                             loading ||
-                                            categories.length === 0
+                                            !teamId ||
+                                            categories.length ===
+                                            0
                                         }
-                                        className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60"
+                                        className="h-[46px] w-full appearance-none rounded-xl border border-white/10 bg-[#172633] px-3 pr-9 text-[15px] text-white outline-none shadow-inner transition focus:border-[#54baff] focus:ring-2 focus:ring-[#54baff]/15 disabled:opacity-50"
                                     >
-                                        {categories.length === 0 ? (
-                                            <option value="">
-                                                No category available
-                                            </option>
-                                        ) : (
-                                            categories.map((item) => (
+                                        <option value="">
+                                            {teamId &&
+                                                categories.length ===
+                                                0
+                                                ? "No categories available"
+                                                : "Select Category"}
+                                        </option>
+
+                                        {categories.map(
+                                            (
+                                                item
+                                            ) => (
                                                 <option
-                                                    key={item.id}
-                                                    value={item.id}
+                                                    key={
+                                                        item.id
+                                                    }
+                                                    value={
+                                                        item.id
+                                                    }
                                                 >
-                                                    {item.name}
+                                                    {
+                                                        item.name
+                                                    }
                                                 </option>
-                                            ))
+                                            )
                                         )}
                                     </select>
 
@@ -833,7 +1149,9 @@ export default function HAPortal() {
 
                             {/* SUB CATEGORY */}
                             {categories.find(
-                                (item) => item.id === categoryId
+                                (item) =>
+                                    item.id ===
+                                    categoryId
                             )?.hasSubCategories && (
                                     <div className="mb-3">
                                         <label className="mb-1 block text-[14px] font-bold text-[#d9e0e5]">
@@ -842,43 +1160,49 @@ export default function HAPortal() {
 
                                         <div className="relative">
                                             <select
-                                                value={subCategoryId ?? ""}
-                                                onChange={(e) => {
-                                                    const nextId = Number(
-                                                        e.target.value
-                                                    );
-
-                                                    const selected =
-                                                        subCategories.find(
-                                                            (item) =>
-                                                                item.id ===
-                                                                nextId
-                                                        );
-
-                                                    setSubCategoryId(nextId);
-                                                    setSubCategory(
-                                                        selected?.name || ""
-                                                    );
-                                                }}
+                                                value={
+                                                    subCategoryId ??
+                                                    ""
+                                                }
+                                                onChange={(e) =>
+                                                    void handleSubCategoryChange(
+                                                        Number(
+                                                            e.target
+                                                                .value
+                                                        )
+                                                    )
+                                                }
                                                 disabled={
                                                     loading ||
-                                                    subCategories.length === 0
+                                                    subCategories.length ===
+                                                    0
                                                 }
-                                                className="h-[43px] w-full appearance-none rounded-md border-2 border-[#aebbc5] bg-[#263746] px-3 pr-9 text-[15px] text-white outline-none focus:border-[#54baff] disabled:opacity-60"
+                                                className="h-[46px] w-full appearance-none rounded-xl border border-white/10 bg-[#172633] px-3 pr-9 text-[15px] text-white outline-none shadow-inner transition focus:border-[#54baff] focus:ring-2 focus:ring-[#54baff]/15 disabled:opacity-50"
                                             >
-                                                {subCategories.length === 0 ? (
-                                                    <option value="">
-                                                        No sub category available
-                                                    </option>
-                                                ) : (
-                                                    subCategories.map((item) => (
+                                                <option value="">
+                                                    {subCategories.length ===
+                                                        0
+                                                        ? "No sub categories available"
+                                                        : "Select Sub Category"}
+                                                </option>
+
+                                                {subCategories.map(
+                                                    (
+                                                        item
+                                                    ) => (
                                                         <option
-                                                            key={item.id}
-                                                            value={item.id}
+                                                            key={
+                                                                item.id
+                                                            }
+                                                            value={
+                                                                item.id
+                                                            }
                                                         >
-                                                            {item.name}
+                                                            {
+                                                                item.name
+                                                            }
                                                         </option>
-                                                    ))
+                                                    )
                                                 )}
                                             </select>
 
@@ -887,6 +1211,7 @@ export default function HAPortal() {
                                     </div>
                                 )}
                         </div>
+
                         {/* ERROR */}
                         {error && (
                             <div className="mb-3 rounded border border-red-300/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
@@ -910,79 +1235,113 @@ export default function HAPortal() {
 
                         {/* SUBJECT LIST */}
                         <div className="space-y-3">
-                            {subjects.map((subject) => (
-                                <SubjectCard
-                                    key={subject.id}
-                                    subject={subject}
-                                    isOpen={openSubjects.includes(
-                                        subject.id
-                                    )}
-                                    onToggle={() =>
-                                        toggleSubject(subject.id)
-                                    }
-                                    onRemark={openRemark}
-                                    onInfo={setSelectedPoint}
-                                />
-                            ))}
+                            {subjects.map(
+                                (
+                                    subject
+                                ) => (
+                                    <SubjectCard
+                                        key={
+                                            subject.id
+                                        }
+                                        subject={
+                                            subject
+                                        }
+                                        isOpen={openSubjects.includes(
+                                            subject.id
+                                        )}
+                                        onToggle={() =>
+                                            toggleSubject(
+                                                subject.id
+                                            )
+                                        }
+                                        onRemark={
+                                            openRemark
+                                        }
+                                        onInfo={
+                                            setSelectedPoint
+                                        }
+                                    />
+                                )
+                            )}
                         </div>
 
                         {!loadingSubjects &&
-                            subjects.length === 0 && (
+                            subjects.length ===
+                            0 && (
                                 <div className="py-10 text-center text-sm text-white/40">
                                     No subjects available
                                 </div>
                             )}
                     </section>
                 </div>
-
             </div>
 
-            {/* POINT INFO MODAL */}
+            {/* ------------------------------------------------
+               POINT INFO MODAL
+            ------------------------------------------------ */}
+
             {selectedPoint && (
                 <Modal>
                     <div className="max-h-[90dvh] overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                        {/* HEADER */}
+
                         <div className="flex items-start justify-between">
-                            <h2 className="text-xl font-bold">
+                            <h2 className="text-xl font-bold tracking-tight">
                                 Point Information
                             </h2>
 
                             <button
                                 type="button"
-                                onClick={() => setSelectedPoint(null)}
+                                onClick={() =>
+                                    setSelectedPoint(
+                                        null
+                                    )
+                                }
                                 className="text-2xl text-white/60 hover:text-white"
                             >
                                 ×
                             </button>
                         </div>
 
-                        {/* POINT INFORMATION */}
                         <div className="mt-3">
                             <PointInfoModal
-                                point={selectedPoint}
-                                formatRemarkDate={formatRemarkDate}
+                                point={
+                                    selectedPoint
+                                }
+                                formatRemarkDate={
+                                    formatRemarkDate
+                                }
                             />
                         </div>
 
-                        {/* ACTION BUTTONS */}
                         <div className="mt-5">
+
                             <button
                                 type="button"
                                 onClick={() => {
-                                    const point = selectedPoint;
+                                    const point =
+                                        selectedPoint;
 
-                                    setSelectedPoint(null);
-                                    openRemark(point);
+                                    setSelectedPoint(
+                                        null
+                                    );
+
+                                    openRemark(
+                                        point
+                                    );
                                 }}
-                                className="w-full rounded border border-[#e18a00] bg-[#744300] py-3 text-sm font-bold"
+                                className="w-full rounded-xl border border-[#e18a00]/70 bg-[#744300]/90 py-3 text-sm font-bold shadow-sm transition hover:bg-[#8a5100]"
                             >
                                 Add Remark
                             </button>
 
                             <button
                                 type="button"
-                                onClick={() => setSelectedPoint(null)}
-                                className="mt-2 w-full rounded bg-[#50bbaa] py-3 text-sm font-bold text-[#17242d]"
+                                onClick={() =>
+                                    setSelectedPoint(
+                                        null
+                                    )
+                                }
+                                className="mt-2 w-full rounded-xl bg-[#50bbaa] py-3 text-sm font-bold text-[#17242d] shadow-sm transition hover:bg-[#5cc9b8]"
                             >
                                 Close
                             </button>
@@ -991,12 +1350,17 @@ export default function HAPortal() {
                 </Modal>
             )}
 
-            {/* REMARK MODAL */}
+            {/* ------------------------------------------------
+               REMARK MODAL
+            ------------------------------------------------ */}
+
             {remarkPoint && (
                 <Modal>
                     <div className="flex max-h-[90dvh] flex-col">
+
                         {/* HEADER */}
                         <div className="flex shrink-0 items-start justify-between">
+
                             <h2 className="text-lg font-bold">
                                 HA Remark
                             </h2>
@@ -1004,8 +1368,18 @@ export default function HAPortal() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setRemarkPoint(null);
-                                    setRemarkText("");
+                                    setRemarkPoint(
+                                        null
+                                    );
+
+                                    setRemarkText(
+                                        ""
+                                    );
+
+                                    setOriginalRemarkText(
+                                        ""
+                                    );
+
                                 }}
                                 className="text-xl text-white/60 hover:text-white"
                             >
@@ -1013,52 +1387,66 @@ export default function HAPortal() {
                             </button>
                         </div>
 
-                        {/* TITLE */}
+                        {/* POINT TITLE */}
                         <div className="mt-3 shrink-0 rounded-md bg-black/20 p-3">
                             <p className="text-[14px] text-[#58baff]">
-                                {remarkPoint.title}
+                                {
+                                    remarkPoint.title
+                                }
                             </p>
                         </div>
 
                         {/* PREVIOUS REMARKS */}
                         <div className="mt-4 min-h-0 flex-1">
+
                             <p className="mb-2 text-[13px] font-bold text-white/80">
                                 Previous Remarks
                             </p>
 
-                            {remarkPoint.remarks?.length > 0 ? (
+                            {remarkPoint.remarks?.length >
+                                0 ? (
                                 <div className="max-h-[180px] overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                                    {remarkPoint.remarks.map((item, index) => (
-                                        <div
-                                            key={
-                                                item.id ??
-                                                `${remarkPoint.id}-${index}`
-                                            }
-                                            className="mb-2 rounded-md bg-[#1e2d39] p-3"
-                                        >
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[11px] font-bold text-[#50bbaa]">
-                                                    {remarkPoint.remarkBy
-                                                        ? `${remarkPoint.remarkBy} Remarks`
-                                                        : "HA Remarks"}
-                                                </span>
 
-                                                {(item.createdAt ||
-                                                    item.created_at) && (
-                                                        <span className="text-[9px] text-white/40">
-                                                            {formatRemarkDate(
-                                                                item.createdAt ||
-                                                                item.created_at
-                                                            )}
-                                                        </span>
-                                                    )}
+                                    {remarkPoint.remarks.map(
+                                        (
+                                            item,
+                                            index
+                                        ) => (
+                                            <div
+                                                key={
+                                                    item.id ??
+                                                    `${remarkPoint.id}-${index}`
+                                                }
+                                                className="mb-2 rounded-md bg-[#1e2d39] p-3"
+                                            >
+
+                                                <div className="flex items-center justify-between gap-2">
+
+                                                    <span className="text-[11px] font-bold text-[#50bbaa]">
+                                                        {item.remarkBy
+                                                            ? `${item.remarkBy} Remarks`
+                                                            : "HA Remarks"}
+                                                    </span>
+
+                                                    {(item.createdAt ||
+                                                        item.created_at) && (
+                                                            <span className="text-[9px] text-white/40">
+                                                                {formatRemarkDate(
+                                                                    item.createdAt ||
+                                                                    item.created_at
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                </div>
+
+                                                <p className="mt-1 text-[12px] leading-4 text-white/80">
+                                                    {
+                                                        item.remark
+                                                    }
+                                                </p>
                                             </div>
-
-                                            <p className="mt-1 text-[12px] leading-4 text-white/80">
-                                                {item.remark}
-                                            </p>
-                                        </div>
-                                    ))}
+                                        )
+                                    )}
                                 </div>
                             ) : (
                                 <div className="rounded-md bg-[#1e2d39] p-3 text-[12px] text-white/40">
@@ -1067,48 +1455,166 @@ export default function HAPortal() {
                             )}
                         </div>
 
-                        {/* NEW REMARK */}
-                        <div className="mt-4 shrink-0">
-                            <p className="mb-2 text-[13px] font-bold text-white/80">
-                                Add New Remark
-                            </p>
+                        {/* ------------------------------------------------
+                           NEW REMARK + AI
+                        ------------------------------------------------ */}
 
-                            <textarea
-                                autoFocus
+                        {/* ------------------------------------------------
+   NEW REMARK + AI
+------------------------------------------------ */}
+
+                        <div className="mt-4 shrink-0">
+
+                            <div className="mb-2 flex items-center justify-between gap-2">
+
+                                <p className="text-[13px] font-bold text-white/80">
+                                    Add New Remark
+                                </p>
+
+                            </div>
+
+
+                            {/* TEXTAREA + UNDO */}
+                            <div className="relative">
+
+                                <textarea
+                                    autoFocus
+                                    value={remarkText}
+                                    onChange={(e) => {
+                                        setRemarkText(e.target.value);
+                                        setOriginalRemarkText("");
+                                    }}
+                                    placeholder="Enter HA Remark"
+                                    rows={4}
+                                    className="
+      w-full
+      resize-none
+      rounded-xl
+      border
+      border-white/10
+      bg-[#172633]
+      px-3
+      py-3
+      pr-24
+      text-sm
+      leading-5
+      outline-none
+      placeholder:text-white/30
+      transition
+      focus:border-[#54baff]
+      focus:ring-2
+      focus:ring-[#54baff]/15
+    "
+                                />
+
+                                {originalRemarkText && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setRemarkText(
+                                                originalRemarkText
+                                            );
+                                            setOriginalRemarkText("");
+                                        }}
+                                        className="
+        absolute
+        right-2
+        top-2
+        z-10
+        rounded-md
+        border
+        border-white/20
+        bg-[#111722]
+        px-3
+        py-1.5
+        text-xs
+        font-semibold
+        text-white/80
+        shadow-lg
+        transition
+        hover:bg-white/10
+        hover:text-white
+      "
+                                    >
+                                        ↶ Undo
+                                    </button>
+                                )}
+
+                            </div>
+
+                            {/* AI ACTIONS */}
+                            <AITextActions
                                 value={remarkText}
-                                onChange={(e) => setRemarkText(e.target.value)}
-                                placeholder="Enter HA Remark"
-                                rows={3}
-                                className="w-full resize-none rounded-md border border-white/30 bg-[#1e2d39] px-3 py-2 text-sm outline-none focus:border-[#54baff]"
+                                onChange={setRemarkText}
+                                disabled={savingRemark}
+                                onError={setError}
+                                onUndoReady={setOriginalRemarkText}
                             />
+
                         </div>
 
-                        {/* BUTTONS */}
+
+                        {/* ------------------------------------------------
+   BUTTONS
+------------------------------------------------ */}
+
                         <div className="mt-4 flex shrink-0 gap-2">
+
+                            {/* CANCEL */}
                             <button
                                 type="button"
                                 onClick={() => {
                                     setRemarkPoint(null);
+
                                     setRemarkText("");
+
+                                    setOriginalRemarkText("");
+
                                 }}
-                                className="flex-1 rounded-md border border-white/20 py-2 text-sm"
+                                className="
+            flex-1
+            rounded-md
+            border
+            border-white/20
+            py-2
+            text-sm
+            transition
+            hover:bg-white/5
+        "
                             >
                                 Cancel
                             </button>
 
+
+                            {/* SAVE */}
                             <button
                                 type="button"
-                                onClick={() => void saveRemark()}
+                                onClick={() =>
+                                    void saveRemark()
+                                }
                                 disabled={
                                     savingRemark ||
                                     !remarkText.trim()
                                 }
-                                className="flex-1 rounded-md bg-[#50bbaa] py-2 text-sm font-bold text-[#17242d] disabled:opacity-50"
+                                className="
+            flex-1
+            rounded-md
+            bg-[#50bbaa]
+            py-2
+            text-sm
+            font-bold
+            text-[#17242d]
+            transition
+            hover:bg-[#5cc9b8]
+            disabled:cursor-not-allowed
+            disabled:opacity-50
+        "
                             >
                                 {savingRemark
                                     ? "Saving..."
                                     : "Add Remark"}
                             </button>
+
                         </div>
                     </div>
                 </Modal>
@@ -1136,30 +1642,37 @@ function SubjectCard({
 }) {
     const colors = {
         yellow: {
-            border: "border-[#d3a900]",
+            border:
+                "border-[#d3a900]",
             bg: "bg-[#705600]",
         },
+
         green: {
-            border: "border-[#009f8e]",
+            border:
+                "border-[#009f8e]",
             bg: "bg-[#006d63]",
         },
+
         red: {
-            border: "border-[#df003c]",
+            border:
+                "border-[#df003c]",
             bg: "bg-[#870027]",
         },
     };
 
-    const current = colors[subject.color];
+    const current =
+        colors[subject.color];
 
     return (
         <div
-            className={`overflow-hidden border-2 ${current.border}`}
+            className={`overflow-hidden rounded-2xl border ${current.border} bg-[#0f1a23]/90 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:shadow-[0_14px_35px_rgba(0,0,0,0.22)]`}
         >
+
             {/* SUBJECT HEADER */}
             <button
                 type="button"
                 onClick={onToggle}
-                className={`block w-full px-3 py-2 text-left ${current.bg}`}
+                className={`block w-full px-4 py-3 text-left transition ${current.bg} hover:brightness-110`}
             >
                 <h3 className="truncate text-[15px] leading-5">
                     {subject.title}
@@ -1172,22 +1685,33 @@ function SubjectCard({
 
             {/* POINTS */}
             {isOpen && (
-                <div className="bg-[#2b3c4c] px-3">
-                    {subject.points.length === 0 ? (
+                <div className="bg-[#172633] px-4">
+
+                    {subject.points.length ===
+                        0 ? (
                         <div className="py-6 text-center text-sm text-white/40">
                             No points available
                         </div>
                     ) : (
                         subject.points.map(
-                            (point, index) => (
+                            (
+                                point,
+                                index
+                            ) => (
                                 <div
-                                    key={point.id}
-                                    className="relative flex gap-2 py-2"
+                                    key={
+                                        point.id
+                                    }
+                                    className="relative flex gap-3 border-b border-white/[0.06] py-3 last:border-b-0"
                                 >
+
                                     {/* TIMELINE */}
                                     <div className="relative flex w-5 shrink-0 justify-center">
+
                                         {index <
-                                            subject.points.length -
+                                            subject
+                                                .points
+                                                .length -
                                             1 && (
                                                 <div className="absolute left-1/2 top-5 h-full w-[2px] -translate-x-1/2 bg-[#b8c2c9]" />
                                             )}
@@ -1197,28 +1721,32 @@ function SubjectCard({
 
                                     {/* POINT CONTENT */}
                                     <div className="min-w-0 flex-1">
+
                                         <div className="flex items-start gap-2">
+
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    onInfo(point)
+                                                    onInfo(
+                                                        point
+                                                    )
                                                 }
-                                                className="min-w-0 flex-1 text-left"
+                                                className="min-w-0 flex-1 rounded-lg text-left transition hover:bg-white/[0.03]"
                                             >
                                                 <p className="text-[14px] leading-5 text-[#58baff]">
                                                     Point :
                                                 </p>
-
-
                                             </button>
 
-                                            {/* REMARK BUTTON */}
+                                            {/* REMARK */}
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    onRemark(point)
+                                                    onRemark(
+                                                        point
+                                                    )
                                                 }
-                                                className="shrink-0 border border-[#e18a00] bg-[#744300] px-2 py-1 text-[10px] text-white hover:bg-[#8a5100]"
+                                                className="shrink-0 rounded-lg border border-[#e18a00]/70 bg-[#744300]/80 px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-[#8a5100]"
                                             >
                                                 Remark
                                             </button>
@@ -1227,7 +1755,9 @@ function SubjectCard({
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    onInfo(point)
+                                                    onInfo(
+                                                        point
+                                                    )
                                                 }
                                                 className="mt-0.5 shrink-0"
                                                 title="Point information"
@@ -1235,22 +1765,31 @@ function SubjectCard({
                                                 <InfoIcon />
                                             </button>
                                         </div>
-                                        <p className="text-[14px] text-justify mt-2 leading-5 text-white">
+
+                                        <p className="mt-2 rounded-lg bg-white/[0.025] px-2 py-1.5 text-justify text-[14px] leading-5 text-white">
                                             {point.title}
                                         </p>
-                                        {point.remarks?.length > 0 ? (
+
+                                        {/* REMARKS */}
+                                        {point.remarks?.length >
+                                            0 ? (
                                             <div className="mt-2 space-y-1">
+
                                                 {point.remarks.map(
-                                                    (remark, remarkIndex) => (
+                                                    (
+                                                        remark,
+                                                        remarkIndex
+                                                    ) => (
                                                         <div
                                                             key={
                                                                 remark.id ??
                                                                 `${point.id}-remark-${remarkIndex}`
                                                             }
-                                                            className="rounded bg-black/10 px-2 py-1"
+                                                            className="rounded-lg border border-white/[0.05] bg-black/10 px-3 py-2"
                                                         >
 
                                                             <div className="flex items-center justify-between gap-2">
+
                                                                 <span className="text-[10px] font-bold text-[#50bbaa]">
                                                                     {remark.remarkBy
                                                                         ? `${remark.remarkBy} Remarks`
@@ -1268,20 +1807,10 @@ function SubjectCard({
                                                                     )}
                                                             </div>
 
-                                                            {/* <p className="text-[10px] font-semibold text-[#50bbaa]">
-                                  {remark.remarkBy || "HA"}
-                                  {(remark.createdAt ||
-                                    remark.created_at) &&
-                                    ` • ${formatRemarkDate(
-                                      remark.createdAt ||
-                                      remark.created_at
-                                    )}`}
-                                </p> */}
-                                                            {/* <p className="text-[11px] leading-4 text-[#c8d0d5]">
-                                  {remark.remark}
-                                </p> */}
                                                             <p className="mt-1 text-[11px] leading-4 text-white/80">
-                                                                {remark.remark}
+                                                                {
+                                                                    remark.remark
+                                                                }
                                                             </p>
                                                         </div>
                                                     )
@@ -1296,7 +1825,7 @@ function SubjectCard({
                         )
                     )}
 
-                    {/* COLLAPSE ARROW */}
+                    {/* COLLAPSE */}
                     <button
                         type="button"
                         onClick={onToggle}
@@ -1321,9 +1850,12 @@ function Modal({
     children: React.ReactNode;
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-            <div className="w-full max-w-[420px] rounded-xl border border-white/10 bg-[#263746] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a0f]/80 px-4 py-6 backdrop-blur-md">
+
+            <div className="w-full max-w-[470px] overflow-hidden rounded-2xl border border-white/10 bg-[#1b2935] p-5 shadow-[0_25px_80px_rgba(0,0,0,0.55)]">
+
                 {children}
+
             </div>
         </div>
     );
@@ -1396,4 +1928,6 @@ function SelectArrow() {
             <path d="m7 14 5 5 5-5" />
         </svg>
     );
+
+
 }

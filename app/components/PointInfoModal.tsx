@@ -34,24 +34,24 @@ export default function PointInfoModal({
 
 
             <div className="rounded-md">
-                <div className="mt-2 rounded-md bg-black/20 p-4">
+                <div className="mt-2 rounded-md bg-[#111b24] p-4">
                     <p className="text-white">
                         Point :{" "}
-                        <span className="text-[#58baff]">
+                        <span className="text-[#A9D1ED]">
                             {point.title}
                         </span>
                     </p>
 
                     <p className="mt-3 text-sm text-white">
                         Created at :{" "}
-                        <span className="text-[#58baff]">
+                        <span className="text-[#A9D1ED]">
                             {point.createdAt}
                         </span>
                     </p>
 
                     <p className="mt-3 text-sm text-white">
                         Updated at :{" "}
-                        <span className="text-[#58baff]">
+                        <span className="text-[#A9D1ED]">
                             {point.updatedAt}
                         </span>
                     </p>
@@ -71,7 +71,7 @@ export default function PointInfoModal({
                                         remark.id ??
                                         `${point.id}-info-${index}`
                                     }
-                                    className="rounded-md bg-black/20 p-3"
+                                    className="rounded-md bg-[#111b24] p-3"
                                 >
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="text-[11px] font-bold text-[#50bbaa]">
